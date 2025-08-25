@@ -1,10 +1,13 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabaseBrowser from '@/lib/supabaseBrowser';
 
-export default function TherapistLogin() {
+export const dynamic = 'force-dynamic';
+
+function TherapistLoginInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const next = sp.get('next') || '/therapist';
@@ -15,7 +18,8 @@ export default function TherapistLogin() {
   const [err, setErr] = useState<string | null>(null);
 
   async function handleLogin() {
-    setBusy(true); setErr(null);
+    setBusy(true);
+    setErr(null);
     const supabase = supabaseBrowser();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
@@ -53,3 +57,12 @@ export default function TherapistLogin() {
     </main>
   );
 }
+
+export default function TherapistLoginPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading…</div>}>
+      <TherapistLoginInner />
+    </Suspense>
+  );
+}
+
