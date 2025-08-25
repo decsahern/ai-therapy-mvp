@@ -1,111 +1,172 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 
-type PatientItem = { id: string; name?: string };
+type PatientItem = { id: string };
 
-export default function PatientPromptEditor() {
-  const [patientId, setPatientId] = useState('');
+export default function PatientPromptPage() {
   const [patients, setPatients] = useState<PatientItem[]>([]);
-  const [prompt, setPrompt] = useState('');
+  const [loadingPatients, setLoadingPatients] = useState<boolean>(true);
+
+  const [patientId, setPatientId] = useState<string>('');
+  const [prompt, setPrompt] = useState<string>('');
   const [status, setStatus] = useState<string | null>(null);
 
-  // Load my patients (based on auth + RLS)
+  const [loadingPrompt, setLoadingPrompt] = useState<boolean>(false);
+  const [saving, setSaving] = useState<boolean>(false);
+
+  // Load patient list for the dropdown
   useEffect(() => {
     (async () => {
+      setLoadingPatients(true);
+      setStatus(null);
       try {
         const r = await fetch('/api/therapist/patients');
-        const j = await r.json();
-        if (r.ok) setPatients(j.items ?? []);
-      } catch {}
+        if (!r.ok) {
+          const txt = await r.text().catch(() => '');
+          const errMsg = (txt || r.statusText || 'Failed to load patients');
+          setStatus(`Patients load failed: ${errMsg}`);
+          setPatients([]);
+        } else {
+          const j = (await r.json()) as { items?: PatientItem[] };
+          setPatients(Array.isArray(j?.items) ? j.items : []);
+          if (!patientId && Array.isArray(j?.items) && j.items.length > 0) {
+            setPatientId(j.items[0].id);
+          }
+        }
+      } catch (e: any) {
+        setStatus(`Patients load error: ${e?.message ?? 'Network error'}`);
+        setPatients([]);
+      } finally {
+        setLoadingPatients(false);
+      }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function load() {
-    if (!patientId) return;
-    setStatus('Loading…');
+  async function loadPrompt() {
+    if (!patientId) {
+      setStatus('Choose a patient first.');
+      return;
+    }
+    setLoadingPrompt(true);
+    setStatus(null);
     try {
-      const r = await fetch(`/api/patient/prompt?patientId=${patientId}`);
-      let j: any = {};
+      const r = await fetch(`/api/patient/prompt?patientId=${encodeURIComponent(patientId)}`);
+      let body: any = null;
       let txt = '';
-      try { j = await r.json(); } catch { txt = await r.text().catch(()=> ''); }
+      try { body = await r.json(); } catch { txt = await r.text().catch(() => ''); }
+
       if (!r.ok) {
-        setStatus(`Load failed: ${j?.error ?? txt || r.statusText}`);
-      } else {
-        setPrompt(j?.prompt ?? '');
-        setStatus(null);
+        const errMsg = (body?.error ?? txt ?? r.statusText ?? 'Load failed');
+        setStatus(`Load failed: ${String(errMsg)}`);
+        return;
       }
+      setPrompt(typeof body?.prompt === 'string' ? body.prompt : '');
+      setStatus(null);
     } catch (e: any) {
-      setStatus('Network error loading prompt.');
+      setStatus(`Load error: ${e?.message ?? 'Network error'}`);
+    } finally {
+      setLoadingPrompt(false);
     }
   }
 
-  async function save() {
-    if (!patientId) { setStatus('Pick a patient first.'); return; }
-    setStatus('Saving…');
+  async function savePrompt() {
+    if (!patientId) {
+      setStatus('Choose a patient first.');
+      return;
+    }
+    setSaving(true);
+    setStatus(null);
     try {
       const r = await fetch('/api/patient/prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ patientId, prompt }),
       });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        setStatus(`Save failed: ${j?.error ?? r.statusText}`);
-      } else {
-        setStatus('Saved ✔');
-        setTimeout(() => setStatus(null), 1500);
+      let body: any = null;
+      let txt = '';
+      try { body = await r.json(); } catch { txt = await r.text().catch(() => ''); }
+
+      if (!r.ok || body?.ok !== true) {
+        const errMsg = (body?.error ?? txt ?? r.statusText ?? 'Save failed');
+        setStatus(`Save failed: ${String(errMsg)}`);
+        return;
       }
+      setStatus('Saved ✔');
     } catch (e: any) {
-      setStatus('Network error saving prompt.');
+      setStatus(`Save error: ${e?.message ?? 'Network error'}`);
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 760, margin: '40px auto', padding: 16 }}>
-      <h1>Patient-Specific Prompt (Level-3)</h1>
-      <p style={{ color: '#555' }}>
-        Pick one of your patients, or paste a patient UUID. You can only edit prompts for your own patients.
-      </p>
+    <div style={{ maxWidth: 800, margin: '40px auto', padding: 16 }}>
+      <h1>Patient-Specific Prompt (L3)</h1>
 
-      <div style={{ display:'grid', gap:8, marginBottom:12 }}>
-        <label>Choose from your patients</label>
-        <select
-          value={patientId}
-          onChange={e => setPatientId(e.target.value)}
-          style={{ padding:10, border:'1px solid #ccc', borderRadius:8 }}
-        >
-          <option value="">— Select —</option>
-          {patients.map(p => (
-            <option key={p.id} value={p.id}>
-              {p.name || '(Patient)'} — {p.id.slice(0,8)}…
-            </option>
-          ))}
-        </select>
+      <div style={{ display: 'grid', gap: 12, marginTop: 16, alignItems: 'center' }}>
+        <div>
+          <label htmlFor="patient">Patient</label>
+          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+            <select
+              id="patient"
+              value={patientId}
+              onChange={(e) => setPatientId(e.target.value)}
+              disabled={loadingPatients}
+              style={{ padding: 8, border: '1px solid #ccc', borderRadius: 8 }}
+            >
+              {loadingPatients ? (
+                <option value="">Loading…</option>
+              ) : patients.length > 0 ? (
+                patients.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.id}
+                  </option>
+                ))
+              ) : (
+                <option value="">No patients found</option>
+              )}
+            </select>
 
-        <label>…or paste Patient ID (UUID)</label>
-        <input
-          style={{ padding:10, border:'1px solid #ccc', borderRadius:8 }}
-          value={patientId}
-          onChange={e => setPatientId(e.target.value)}
-          placeholder="e.g. 7f68b435-...."
-        />
+            <button
+              onClick={loadPrompt}
+              disabled={loadingPrompt || !patientId}
+              style={{ padding: '8px 12px', borderRadius: 8 }}
+            >
+              {loadingPrompt ? 'Loading…' : 'Load'}
+            </button>
+          </div>
+        </div>
 
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={load} style={{ padding:'10px 16px', borderRadius:8 }}>Load</button>
-          <button onClick={save} style={{ padding:'10px 16px', borderRadius:8 }}>Save</button>
-          {status && <span>{status}</span>}
+        <div>
+          <label htmlFor="prompt">Prompt</label>
+          <textarea
+            id="prompt"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="e.g. Use a calm, validating tone. Keep replies under 5 sentences. End with 2 actionable steps."
+            style={{
+              width: '100%',
+              height: 160,
+              padding: 12,
+              border: '1px solid #ccc',
+              borderRadius: 8,
+            }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <button
+            onClick={savePrompt}
+            disabled={saving || !patientId}
+            style={{ padding: '10px 16px', borderRadius: 10 }}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          {status && <span style={{ color: /failed|error/i.test(status) ? 'crimson' : 'green' }}>{status}</span>}
         </div>
       </div>
-
-      <label>Patient Prompt</label>
-      <textarea
-        value={prompt}
-        onChange={e => setPrompt(e.target.value)}
-        rows={12}
-        style={{ width:'100%', padding:12, border:'1px solid #ccc', borderRadius:8 }}
-        placeholder="e.g., Focus on exposure tasks; avoid reassurance; end with 2 action items."
-      />
     </div>
   );
 }
-
