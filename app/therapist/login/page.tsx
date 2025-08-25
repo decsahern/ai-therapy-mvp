@@ -1,11 +1,8 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabaseBrowser from '@/lib/supabaseBrowser';
-
-export const dynamic = 'force-dynamic';
 
 function TherapistLoginInner() {
   const router = useRouter();
@@ -18,13 +15,12 @@ function TherapistLoginInner() {
   const [err, setErr] = useState<string | null>(null);
 
   async function handleLogin() {
-    setBusy(true);
-    setErr(null);
+    setBusy(true); setErr(null);
     const supabase = supabaseBrowser();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) { setErr(error.message); return; }
-    router.push(next);
+    router.push(next); // redirect ONLY after successful login
   }
 
   return (
@@ -60,9 +56,10 @@ function TherapistLoginInner() {
 
 export default function TherapistLoginPage() {
   return (
-    <Suspense fallback={<div className="p-6">Loading…</div>}>
+    <Suspense fallback={<main className="p-6">Loading…</main>}>
       <TherapistLoginInner />
     </Suspense>
   );
 }
+
 
