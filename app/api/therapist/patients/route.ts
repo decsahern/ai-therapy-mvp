@@ -18,18 +18,18 @@ export async function GET() {
   if (terr) return NextResponse.json({ error: terr.message }, { status: 500 });
   if (!therapist?.id) return NextResponse.json({ items: [] });
 
-  // Read conversations for this therapist (RLS must allow select)
+  // Get conversations for this therapist
   const { data, error } = await supabase
     .from('conversations')
     .select('patient_id')
     .eq('therapist_id', therapist.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Unique patient IDs
+  // Deduplicate patient IDs
   const seen = new Set<string>();
   const items = (data ?? [])
     .map(row => row?.patient_id as string | undefined)
-    .filter((id): id is string => !!id && !seen.has(id) && seen.add(id))
+    .filter((id): id is string => !!id && !seen.has(id) ? (seen.add(id), true) : false)
     .map(id => ({ id }));
 
   return NextResponse.json({ items });
