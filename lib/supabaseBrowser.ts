@@ -1,10 +1,10 @@
 // lib/supabaseBrowser.ts
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseBrowser = () =>
-  createClient(
+// Default export for easy importing: `import supabaseBrowser from '@/lib/supabaseBrowser'`
+export default function supabaseBrowser() {
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
-
-export default supabaseBrowser;
+}

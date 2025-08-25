@@ -1,77 +1,63 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { NextResponse } from 'next/server';
+import supabaseServer from '@/lib/supabaseServer';
 
-export async function GET() {
-  try {
-    const cookieStore = cookies();
-    const supaAuth = createRouteHandlerClient({ cookies: () => cookieStore });
-    const { data: authData } = await supaAuth.auth.getSession();
-    const userId = authData?.session?.user?.id;
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+export async function GET(req: Request) {
+  const supabase = await supabaseServer();
 
-    const db = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+  const url = new URL(req.url);
+  const patientId = url.searchParams.get('patientId');
 
-    const { data: therapist, error: tErr } = await db
-      .from('therapists')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
-    if (!therapist?.id) return NextResponse.json({ error: 'Therapist not found' }, { status: 404 });
-
-    const { data: row, error } = await db
-      .from('therapist_prompts')
-      .select('prompt, updated_at')
-      .eq('therapist_id', therapist.id)
-      .maybeSingle();
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    return NextResponse.json({ prompt: row?.prompt ?? '', updated_at: row?.updated_at ?? null });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Server error' }, { status: 500 });
+  if (!patientId) {
+    return NextResponse.json({ error: 'patientId is required' }, { status: 400 });
   }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
+  const { data: tRow } = await supabase
+    .from('therapists')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (!tRow) return NextResponse.json({ prompt: '', updated_at: null });
+
+  const { data } = await supabase
+    .from('patient_prompts')
+    .select('prompt, updated_at')
+    .eq('patient_id', patientId)
+    .maybeSingle();
+
+  return NextResponse.json({
+    prompt: data?.prompt ?? '',
+    updated_at: data?.updated_at ?? null,
+  });
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json().catch(() => ({}));
-    const prompt = typeof body?.prompt === 'string' ? body.prompt : '';
+export async function POST(req: Request) {
+  const supabase = await supabaseServer();
 
-    const cookieStore = cookies();
-    const supaAuth = createRouteHandlerClient({ cookies: () => cookieStore });
-    const { data: authData } = await supaAuth.auth.getSession();
-    const userId = authData?.session?.user?.id;
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+  const body = await req.json().catch(() => ({}));
+  const { patientId, prompt } = body as { patientId?: string; prompt?: string };
 
-    const db = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
-    const { data: therapist, error: tErr } = await db
-      .from('therapists')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
-    if (!therapist?.id) return NextResponse.json({ error: 'Therapist not found' }, { status: 404 });
-
-    const { error } = await db
-      .from('therapist_prompts')
-      .upsert({ therapist_id: therapist.id, prompt }, { onConflict: 'therapist_id' });
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Server error' }, { status: 500 });
+  if (!patientId) {
+    return NextResponse.json({ error: 'patientId is required' }, { status: 400 });
   }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
+  const { error } = await supabase
+    .from('patient_prompts')
+    .upsert({ patient_id: patientId, prompt: prompt ?? '' }, { onConflict: 'patient_id' });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
 }
+

@@ -1,7 +1,10 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServerWithAuth } from '@/lib/supabaseServer';
+import supabaseServer from '@/lib/supabaseServer';
+
+const supabase = await supabaseServer();
+
 
 /**
  * GET /api/patient/prompt?patientId=UUID
