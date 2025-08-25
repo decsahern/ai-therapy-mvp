@@ -1,77 +1,72 @@
-export const runtime = 'nodejs';
-
+// app/api/patient/prompt/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import supabaseServer from '@/lib/supabaseServer';
 
-const supabase = await supabaseServer();
-
-
 /**
- * GET /api/patient/prompt?patientId=UUID
- * Returns the current patient-specific (Level 3) prompt.
- * RLS ensures only the therapist linked to this patient (via conversations) can read it.
+ * GET /api/patient/prompt?patientId=...
+ * - Returns the L3 prompt for a patient.
+ * - If patientId is not provided, defaults to the signed-in user's id.
  */
 export async function GET(req: NextRequest) {
-  try {
-    const supabase = supabaseServerWithAuth();
-    const { searchParams } = new URL(req.url);
-    const patientId = searchParams.get('patientId');
+  const supabase = await supabaseServer(); // IMPORTANT: await
 
-    if (!patientId) {
-      return NextResponse.json({ error: 'Missing patientId' }, { status: 400 });
-    }
-
-    const { data, error } = await supabase
-      .from('patient_prompts')
-      .select('prompt, updated_at')
-      .eq('patient_id', patientId)
-      .maybeSingle();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    // If there is no row (or RLS hides it), return an empty prompt gracefully
-    return NextResponse.json({
-      prompt: data?.prompt ?? '',
-      updated_at: data?.updated_at ?? null,
-    });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Server error' }, { status: 500 });
+  const {
+    data: { user },
+    error: authErr,
+  } = await supabase.auth.getUser();
+  if (authErr || !user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
+
+  const { searchParams } = new URL(req.url);
+  const patientId = searchParams.get('patientId') ?? user.id;
+
+  // Adjust table/columns if yours are named differently
+  const { data, error } = await supabase
+    .from('patient_prompts')
+    .select('prompt')
+    .eq('patient_id', patientId)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ prompt: data?.prompt ?? '' });
 }
 
 /**
- * POST /api/patient/prompt
- * Body: { patientId: UUID, prompt: string }
- * Upserts the patient-specific prompt.
- * RLS ensures only the therapist linked to this patient (via conversations) can write it.
+ * PUT /api/patient/prompt
+ * Body: { patientId?: string, prompt: string }
+ * - Upserts the L3 prompt for a patient.
+ * - If patientId is omitted, uses the signed-in user's id.
  */
-export async function POST(req: NextRequest) {
-  try {
-    const supabase = supabaseServerWithAuth();
-    const body = await req.json().catch(() => ({}));
-    const patientId = body?.patientId as string | undefined;
-    const prompt = body?.prompt as string | undefined;
+export async function PUT(req: NextRequest) {
+  const supabase = await supabaseServer(); // IMPORTANT: await
 
-    if (!patientId || typeof prompt !== 'string') {
-      return NextResponse.json(
-        { error: 'Missing or invalid body. Expect { patientId: UUID, prompt: string }' },
-        { status: 400 }
-      );
-    }
-
-    const { error } = await supabase
-      .from('patient_prompts')
-      .upsert({ patient_id: patientId, prompt });
-
-    if (error) {
-      // If RLS blocks, this will contain a helpful message like "permission denied for table ..."
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Server error' }, { status: 500 });
+  const {
+    data: { user },
+    error: authErr,
+  } = await supabase.auth.getUser();
+  if (authErr || !user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
+
+  const body = (await req.json().catch(() => ({}))) as {
+    patientId?: string;
+    prompt?: string;
+  };
+
+  const patientId = body.patientId ?? user.id;
+  const prompt = body.prompt ?? '';
+
+  const { error } = await supabase
+    .from('patient_prompts')
+    .upsert({ patient_id: patientId, prompt }, { onConflict: 'patient_id' });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
 }
