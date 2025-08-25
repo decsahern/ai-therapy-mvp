@@ -25,12 +25,12 @@ export async function GET() {
     .eq('therapist_id', therapist.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Deduplicate patient IDs
-  const seen = new Set<string>();
-  const items = (data ?? [])
+  // ✅ Type-safe dedupe
+  const ids = (data ?? [])
     .map(row => row?.patient_id as string | undefined)
-    .filter((id): id is string => !!id && !seen.has(id) ? (seen.add(id), true) : false)
-    .map(id => ({ id }));
+    .filter((id): id is string => !!id);
+  const unique = Array.from(new Set(ids));
+  const items = unique.map(id => ({ id }));
 
   return NextResponse.json({ items });
 }
