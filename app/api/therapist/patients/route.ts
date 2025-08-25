@@ -1,15 +1,13 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { supabaseServerWithAuth } from '@/lib/supabaseServer';
 
 export async function GET() {
   const supabase = supabaseServerWithAuth();
 
-  // Who am I?
   const { data: { user }, error: uerr } = await supabase.auth.getUser();
   if (uerr) return NextResponse.json({ error: uerr.message }, { status: 500 });
   if (!user) return NextResponse.json({ items: [] });
 
-  // Find therapist row for this user
   const { data: therapist, error: terr } = await supabase
     .from('therapists')
     .select('id')
@@ -18,19 +16,22 @@ export async function GET() {
   if (terr) return NextResponse.json({ error: terr.message }, { status: 500 });
   if (!therapist?.id) return NextResponse.json({ items: [] });
 
-  // Get conversations for this therapist
   const { data, error } = await supabase
     .from('conversations')
     .select('patient_id')
     .eq('therapist_id', therapist.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // ✅ Type-safe dedupe
-  const ids = (data ?? [])
-    .map(row => row?.patient_id as string | undefined)
-    .filter((id): id is string => !!id);
-  const unique = Array.from(new Set(ids));
-  const items = unique.map(id => ({ id }));
+  // Safe dedupe with a loop (no fancy filter)
+  const seen = new Set<string>();
+  const items: { id: string }[] = [];
+  for (const row of (data ?? [])) {
+    const id = row?.patient_id as string | undefined;
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      items.push({ id });
+    }
+  }
 
   return NextResponse.json({ items });
 }
