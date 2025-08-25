@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import supabaseBrowser from '@/lib/supabaseBrowser';
 
-export default function TherapistLoginPage() {
+export default function PatientRegisterPage() {
   const router = useRouter();
-  const [nextPath, setNextPath] = useState('/therapist');
+  const [nextPath, setNextPath] = useState('/patient');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,14 +21,23 @@ export default function TherapistLoginPage() {
     } catch {}
   }, []);
 
-  async function handleLogin() {
+  async function handleRegister() {
     setBusy(true);
     setMsg(null);
     try {
       const supabase = supabaseBrowser();
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { role: 'patient' } },
+      });
       if (error) return setMsg(error.message);
-      if (!data.session) return setMsg('No session returned. Check email verification settings.');
+
+      if (!data.session) {
+        setMsg('Check your email to verify your account, then sign in.');
+        return;
+      }
+
       router.replace(nextPath);
     } catch (e: any) {
       setMsg(e?.message || 'Unexpected error.');
@@ -39,7 +48,7 @@ export default function TherapistLoginPage() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
-      <h1 className="text-2xl font-semibold">Therapist Login</h1>
+      <h1 className="text-2xl font-semibold">Patient Registration</h1>
 
       <div className="w-full max-w-sm flex flex-col gap-3">
         <input
@@ -59,18 +68,18 @@ export default function TherapistLoginPage() {
 
         <button
           type="button"
-          className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-60"
-          onClick={handleLogin}
+          className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-60"
+          onClick={handleRegister}
           disabled={busy}
         >
-          {busy ? 'Signing in…' : 'Sign in'}
+          {busy ? 'Creating…' : 'Create account'}
         </button>
 
         <a
-          href="/therapist/register?next=/therapist"
+          href="/patient/login?next=/patient"
           className="text-sm text-blue-600 underline mt-2"
         >
-          Need an account? Register
+          Already have an account? Sign in
         </a>
 
         {msg && <div className="text-red-600 text-sm">{msg}</div>}
@@ -78,4 +87,3 @@ export default function TherapistLoginPage() {
     </main>
   );
 }
-

@@ -1,36 +1,29 @@
-import Link from "next/link";
+import Link from 'next/link';
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex items-center justify-center p-8">
-      <div className="w-full max-w-xl mx-auto text-center space-y-8">
-        <h1 className="text-3xl font-semibold">AI Therapy Assistant</h1>
-        <p className="text-neutral-600">
+    <main className="min-h-screen grid place-items-center p-8">
+      <div className="max-w-md w-full flex flex-col gap-6 items-center">
+        <h1 className="text-2xl font-semibold">AI Therapy MVP</h1>
+        <p className="text-gray-600 text-center">
           Choose your role to continue.
         </p>
-
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex gap-3">
           <Link
-            href="/patient/login"
-            className="rounded-lg border border-neutral-300 px-6 py-4 hover:bg-neutral-50 text-lg"
+            href="/patient/login?next=/patient"
+            className="px-4 py-2 rounded bg-green-600 text-white"
           >
-            I am a Patient
+            I am a patient
           </Link>
-
           <Link
-            href="/therapist/login"
-            className="rounded-lg border border-neutral-300 px-6 py-4 hover:bg-neutral-50 text-lg"
+            href="/therapist/login?next=/therapist"
+            className="px-4 py-2 rounded bg-blue-600 text-white"
           >
-            I am a Therapist
+            I am a therapist
           </Link>
-        </div>
-
-        <div className="text-sm text-neutral-500">
-          You’ll be asked to sign in or sign up.
         </div>
       </div>
     </main>
   );
 }
-
 
