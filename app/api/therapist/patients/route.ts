@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { supabaseServerWithAuth } from '@/lib/supabaseServer';
 
 export async function GET() {
@@ -22,7 +22,7 @@ export async function GET() {
     .eq('therapist_id', therapist.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Safe dedupe with a loop (no fancy filter)
+  // Safe, TS-friendly dedupe
   const seen = new Set<string>();
   const items: { id: string }[] = [];
   for (const row of (data ?? [])) {
